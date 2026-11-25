@@ -1,11 +1,15 @@
 # Magpie Native — Magisk 模块
 
-把 [magpie](https://github.com/yetone/magpie) 的 Android 原生内核做成 Magisk 模块：开机自启、崩溃自动重启、数据便携化，不依赖 APK。
+> **核心上游来自 [yetone/magpie](https://github.com/yetone/magpie)**（MIT）。
+> 本项目只是把它的 Android arm64 内核包成 Magisk 模块，内核一行没改。
+> 所有 AI 网关能力、供应商适配、网页后台，都是上游的功劳。
 
-- 内核 **v0.1.4740**（上游 `magpie-cli-android-arm64`，arm64）
+把 magpie 的 Android 原生内核做成 Magisk 模块：开机自启、崩溃自动重启、数据便携化，不依赖 APK。
+
+- 内核 **v0.1.4740**（上游 `magpie-cli-android-arm64`，arm64，sha256 与官方 SHA256SUMS 一致）
 - 模块 id `magpie_native` ｜ 网关 **3425** ｜ 网页后台 **3430**
 - 支持 Magisk / KernelSU / APatch
-- 作者：酷安 [@图图没耳朵](https://www.coolapk.com/u/1642567)
+- 模块与移植：酷安 [@图图没耳朵](https://www.coolapk.com/u/1642567)
 
 ## 安装
 
@@ -74,9 +78,9 @@ r1 及更早的 bug，r2 已修。
 
 ## 相关
 
-- 上游内核：[yetone/magpie](https://github.com/yetone/magpie)（MIT）
+- **核心上游：[yetone/magpie](https://github.com/yetone/magpie)**（MIT）—— 内核、网关、网页后台全部来自这里
 - 模块版 App 源码：[app-source 分支](../../tree/app-source)（`com.magpie.module`，704KB，只探测不启动内核）
 
 ## 许可
 
-MIT。magpie 内核版权归 yetone，见 [LICENSE](LICENSE)。
+MIT。magpie 内核版权归 [yetone](https://github.com/yetone)，本仓库只做模块封装与 Android 移植，见 [LICENSE](LICENSE)。

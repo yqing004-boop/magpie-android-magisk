@@ -1,5 +1,8 @@
 # Magpie Native — 完整手册
 
+> 核心上游来自 **[yetone/magpie](https://github.com/yetone/magpie)**（MIT）。
+> 本项目只是把它的 Android arm64 内核包成 Magisk 模块，内核一行没改。
+
 把 magpie（AI 网关）的 Android 原生内核做成 Magisk 模块：开机自启、崩溃自动重启、数据便携化，不依赖 APK。
 
 - 内核版本：**v0.1.4740**（上游 `yetone/magpie` 的 `magpie-cli-android-arm64`）
