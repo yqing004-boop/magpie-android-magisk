@@ -1,5 +1,6 @@
 # 内核二进制 98MB，不进 git（由 scripts/pack.sh 打包时从外部拷入）
-magpie
+# 只忽略根目录的这个文件，避免误伤 com/magpie/ 之类的路径
+/magpie
 # 打包中间目录
 .pack-stage/
 # 运行时产物
