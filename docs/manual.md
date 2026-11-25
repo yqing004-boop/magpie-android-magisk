@@ -1,4 +1,4 @@
-# Magpie Native — 完整手册
+# Magpie Native (AI Gateway) — Magisk 模块
 
 > 核心上游来自 **[yetone/magpie](https://github.com/yetone/magpie)**（MIT）。
 > 本项目只是把它的 Android arm64 内核包成 Magisk 模块，内核一行没改。
@@ -19,9 +19,24 @@
 - 机型要求：arm64
 - 不需要装 APK 版 magpie；装了也可以共存，但**两者抢 3425 端口，必须停一个**
 
-## 二、安装
+## 二、两种 zip：完整版 vs 更新版
 
-1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r4.zip`
+| | 完整版 | 更新版（`--update`） |
+|---|---|---|
+| 大小 | 102MB | **约 1MB** |
+| 内容 | 内核 + 脚本 | 只有脚本 + `ksha.txt`（内核 sha256） |
+| 刷入耗时 | 一两分钟 | **十几秒** |
+| 用途 | 首次安装 / 内核升级 | 日常更新 |
+
+更新版刷入时，`customize.sh` 会校验已装模块的内核 sha256 与包里 `ksha.txt` 是否一致：
+一致 → `mv` 接管（瞬间）；不一致（比如你换过内核）→ 拒绝借，提示改用完整版。
+
+**更新版同时接管旧模块的 `data/` 和 `webkey.txt`**（也是 `mv`，瞬间）——
+所以更新不会丢账本，网页后台 key 也不再每次刷入都变。
+
+## 二点一、安装
+
+1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r3.zip`
 2. 安装过程会显示：
    - 便携模式标记创建
    - 旧数据检测与迁移结果（如有）
@@ -191,7 +206,7 @@ if fi, err := os.Stat(filepath.Join(base, MarkerName)); err == nil && !fi.IsDir(
 
 二进制在 `bin/magpie`、标记在 `bin/.portable` 时，内核读写的是 `bin/data`。而 `customize.sh` 建的是模块根 `data/` —— **迁移校验会通过，但内核读的是空目录**，账号和网关配置全丢。这个 bug 不报错，只表现为「网页后台打开是空的」。
 
-v0.1.4740 就是这个布局，v0.1.4740-r4 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
+v0.1.4740 就是这个布局，v0.1.4740-r3 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
 
 ## 四、数据迁移（从 APK 版）
 
@@ -388,7 +403,7 @@ su -c "awk '{print \$19}' /proc/$(cat /data/adb/modules/magpie_native/magpie.pid
 
 ## 版本记录
 
-- **v0.1.4740-r4**（versionCode 4743）
+- **v0.1.4740-r3**（versionCode 4743）
   - 新增：**模块页按钮即时启停**（`action.sh`），不用重启手机
   - 修：`service.sh` / `watchdog.sh` 现在读 `disable`，模块页开关立刻生效
   - 新增：`stop.flag` 机制 —— 手动停的内核不会被 watchdog 拉回来

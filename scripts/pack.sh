@@ -2,9 +2,14 @@
 # 打 Magpie Native 模块 zip
 #
 # 用法：
-#   sh scripts/pack.sh <内核二进制路径> <版本名> <versionCode>
+#   sh scripts/pack.sh <内核二进制路径> <版本名> <versionCode> [--update]
 # 例：
-#   sh scripts/pack.sh ~/workspace/magisk-magpie-module/bin/magpie v0.1.4740-r1 4741
+#   sh scripts/pack.sh ~/x/magpie v0.1.4740-r5 4745            # 完整包（带内核）
+#   sh scripts/pack.sh ~/x/magpie v0.1.4740-r5 4745 --update   # 更新包（约 1MB，不带内核）
+#
+# 完整包：内含 102MB 内核，首次安装 / 内核升级用。
+# 更新包：只含脚本 + ksha.txt（内核 sha256），刷入十几秒；
+#         customize.sh 校验旧模块内核 sha256 一致才接管，不一致拒绝。
 #
 # 产物：dist-magisk/magpie-native-<版本名>.zip
 #
@@ -19,6 +24,11 @@ REPO="$(cd "$SRC/.." && pwd)"                   # magpie-bake/
 BIN="${1:-}"
 VER="${2:-}"
 CODE="${3:-}"
+UPDATE_MODE="${4:-}"
+
+# 更新包也要给 BIN（用来算 sha256 写进 ksha.txt），但文件本身不进包
+[ -n "$BIN" ] || die "缺内核路径。用法：sh scripts/pack.sh <magpie> <版本名> <versionCode> [--update]"
+[ -f "$BIN" ] || die "内核不存在：$BIN"
 
 die() { echo "错误：$*" >&2; exit 1; }
 
@@ -57,11 +67,24 @@ done
 # ---------- DNS ----------
 cp -f "$SRC/system/etc/resolv.conf" "$STAGE/system/etc/resolv.conf"
 
-# ---------- 内核 + 便携标记（必须在模块根，与 data/ 同级） ----------
-cp -f "$BIN" "$STAGE/magpie"
-chmod 755 "$STAGE/magpie"
+# ---------- 便携标记（必须在模块根，与 data/ 同级） ----------
 : > "$STAGE/.portable"
 chmod 644 "$STAGE/.portable"
+
+# ---------- 内核 / 内核校验值 ----------
+KSHA=$(sha256sum "$BIN" | cut -d' ' -f1)
+if [ "$UPDATE_MODE" = "--update" ]; then
+  # 更新包：只写内核 sha256，customize.sh 校验旧模块内核一致才接管
+  echo "$KSHA" > "$STAGE/ksha.txt"
+  chmod 644 "$STAGE/ksha.txt"
+  echo "（更新包模式：内核不进包，sha256 写入 ksha.txt）"
+else
+  cp -f "$BIN" "$STAGE/magpie"
+  chmod 755 "$STAGE/magpie"
+  # 完整包也带 ksha.txt： customize.sh 据此判断内核对不对
+  echo "$KSHA" > "$STAGE/ksha.txt"
+  chmod 644 "$STAGE/ksha.txt"
+fi
 
 # ---------- 权限 ----------
 chmod 755 "$STAGE" "$STAGE/scripts"
@@ -75,7 +98,12 @@ sed -i "s|^versionCode=.*|versionCode=$CODE|" "$STAGE/module.prop"
 
 # ---------- 打 zip ----------
 mkdir -p "$REPO/dist-magisk"
-ZIP="$REPO/dist-magisk/magpie-native-$VER.zip"
+# 更新包加 -update 后缀，两种包共存
+if [ "$UPDATE_MODE" = "--update" ]; then
+  ZIP="$REPO/dist-magisk/magpie-native-$VER-update.zip"
+else
+  ZIP="$REPO/dist-magisk/magpie-native-$VER.zip"
+fi
 rm -f "$ZIP"
 
 # 用 python 打：控制时间戳（可复现）
@@ -106,7 +134,8 @@ echo
 echo "zip: $ZIP"
 echo "大小: $(du -h "$ZIP" | cut -f1)"
 echo "sha256: $(sha256sum "$ZIP" | cut -d' ' -f1)"
-echo "内核 sha256: $(sha256sum "$BIN" | cut -d' ' -f1)"
+echo "内核 sha256: $KSHA"
+[ "$UPDATE_MODE" = "--update" ] && echo "（更新包：刷入时从旧模块接管内核与数据）"
 echo
 echo "内容："
 unzip -l "$ZIP"

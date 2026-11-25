@@ -64,7 +64,7 @@ fi
 
 UI_PRINT "*******************************"
 UI_PRINT "  Magpie Native (AI Gateway)   "
-UI_PRINT "  v0.1.4740-r4  android-arm64  "
+UI_PRINT "  v0.1.4740-r5  android-arm64  "
 UI_PRINT "  酷安@图图没耳朵          "
 UI_PRINT "*******************************"
 UI_PRINT "- 模块目录：$MODDIR"
@@ -156,6 +156,13 @@ PY
   return 1
 }
 
+# ---------- 旧模块目录（更新场景用它搬数据/借内核）----------
+# KSU/Magisk 更新 = modules_update/<id> 整个替换 modules/<id>，
+# 旧模块目录在重启前还完整地在原地。安装时从那里 mv 数据和内核，
+# 瞬间完成；否则每次更新都要重解 102MB + 重拷 234MB。
+OLDMOD="/data/adb/modules/magpie_native"
+[ "$OLDMOD" = "$MODDIR" ] && OLDMOD=""
+
 if ! bin_ok "$MODDIR/magpie"; then
   if [ -f "$MODDIR/magpie" ]; then
     SZ=$(stat -c %s "$MODDIR/magpie" 2>/dev/null || echo 0)
@@ -164,13 +171,31 @@ if ! bin_ok "$MODDIR/magpie"; then
   fi
 
   GOT=0
-  if [ -n "$ZIPFILE" ] && extract_bin "$ZIPFILE"; then
-    GOT=1
+  # 来源 1：已安装的旧模块（更新版 zip 不带内核，就从这里借）
+  EXPECT_SHA=""
+  [ -f "$MODDIR/ksha.txt" ] && EXPECT_SHA=$(cat "$MODDIR/ksha.txt" 2>/dev/null)
+  if [ "$GOT" = "0" ] && [ -n "$OLDMOD" ] && bin_ok "$OLDMOD/magpie"; then
+    if [ -z "$EXPECT_SHA" ]; then
+      UI_PRINT "! 完整包缺 ksha.txt，不从旧模块借内核"
+    elif [ "$(sha256sum "$OLDMOD/magpie" 2>/dev/null | cut -d' ' -f1)" = "$EXPECT_SHA" ]; then
+      if mv -f "$OLDMOD/magpie" "$MODDIR/magpie" 2>/dev/null && bin_ok "$MODDIR/magpie"; then
+        UI_PRINT "- 更新：从旧模块接管内核（mv 瞬间，不用重解 102MB）"
+        GOT=1
+      fi
+    else
+      UI_PRINT "! 旧模块内核与本包要求的不一致，不从旧模块借"
+      UI_PRINT "  请改用完整版 zip（内含新内核）"
+    fi
   fi
+  # 来源 2：安装器给的 zip
+  if [ "$GOT" = "0" ] && [ -n "$ZIPFILE" ] && extract_bin "$ZIPFILE"; then
+    GOT=1
+    UI_PRINT "- 从 zip 解出内核"
+  fi
+  # 来源 3：Download 里以前传的 zip
   if [ "$GOT" = "0" ]; then
     for z in /sdcard/Download/magpie-native*.zip \
-             /storage/emulated/0/Download/magpie-native*.zip \
-             /data/adb/modules_update/magpie_native/*.zip; do
+             /storage/emulated/0/Download/magpie-native*.zip; do
       [ -f "$z" ] || continue
       extract_bin "$z" && { GOT=1; break; }
     done
@@ -178,15 +203,29 @@ if ! bin_ok "$MODDIR/magpie"; then
 
   if [ "$GOT" = "0" ]; then
     UI_PRINT "! 错误：拿不到 magpie 内核"
-    UI_PRINT "  zip 里应该有 102760744 字节的 magpie"
-    UI_PRINT "  常见原因：/data 空间不足，或安装器跳过了大文件"
-    UI_PRINT "  手动补救（不用重刷）："
-    UI_PRINT "    1. 把 magpie-native zip 里的 magpie 拷到 /sdcard/Download/"
+    UI_PRINT "  本包是不带内核的更新版；首次安装请用完整版 zip"
+    UI_PRINT "  手动补救："
+    UI_PRINT "    1. 把 magpie 拷到 /sdcard/Download/"
     UI_PRINT "    2. su -c \"cp /sdcard/Download/magpie $MODDIR/magpie\""
     UI_PRINT "    3. su -c \"chmod 755 $MODDIR/magpie\""
-    UI_PRINT "    4. su -c \"sh $MODDIR/scripts/restart.sh $MODDIR\""
     abort "! 安装中止：内核缺失"
     exit 1
+  fi
+fi
+
+# ---------- 更新场景：接管旧模块的数据（瞬间 mv，不重拷 234MB）----------
+if [ -n "$OLDMOD" ] && [ -d "$OLDMOD/data" ]; then
+  rmdir "$MODDIR/data" 2>/dev/null
+  if mv -f "$OLDMOD/data" "$MODDIR/data" 2>/dev/null; then
+    UI_PRINT "- 更新：已接管旧模块 data/（配置、账本、插件全保留）"
+  else
+    UI_PRINT "- mv 失败，退回 cp（会慢一点）"
+    mkdir -p "$MODDIR/data"
+    cp -a "$OLDMOD/data/." "$MODDIR/data/" 2>/dev/null
+  fi
+  if [ -s "$OLDMOD/webkey.txt" ]; then
+    cp -f "$OLDMOD/webkey.txt" "$MODDIR/webkey.txt" 2>/dev/null \
+      && UI_PRINT "- 网页后台 key 沿用旧模块的（不再每次都变）"
   fi
 fi
 
@@ -272,16 +311,17 @@ ask_migration() {
   esac
 }
 
+# 注意：r5 起更新场景会先从旧模块接管 data/（见上面 OLDMOD 段），
+# 所以这里看的是「接管后的 data/」：
+#   - 里面已有账本（之前迁过或已迁移过）→ 不再问，直接跳过
+#   - 里面没有账本（首次安装 / 一直没迁过）且老 APK 目录存在 → 音量键问一次
+
 if [ "$SKIP_MIGRATION" = "1" ]; then
   UI_PRINT "- SKIP_MIGRATION=1，跳过迁移"
+elif [ -s "$MODDIR/data/usage.jsonl" ]; then
+  UI_PRINT "- data/usage.jsonl 已存在（账本已在），跳过迁移"
 elif [ ! -d "$OLD_DATA" ]; then
   UI_PRINT "- 未检测到旧 APK 数据目录，跳过迁移"
-elif [ -s "$MODDIR/data/usage.jsonl" ]; then
-  # 模块自己的 data/ 里已经有账本：说明之前迁移过或模块版已写过账本。
-  # 再问一遍只会让每次更新刷入都慢几十秒，直接跳过。
-  UI_PRINT "- 模块 data/usage.jsonl 已存在（之前迁移过或已在使用），跳过"
-  UI_PRINT "  如需重新迁移，手动跑："
-  UI_PRINT "  sh $MODDIR/scripts/migrate-from-apk.sh $MODDIR"
 else
   UI_PRINT "- 检测到旧 APK 版数据目录"
   UI_PRINT "  $OLD_DATA"
