@@ -1,6 +1,9 @@
 # Magpie 模块版 App（源码）
 
-Magisk 模块 [magpie-android-magisk](https://github.com/yqing004-boop/magpie-android-magisk) 的配套 App。
+> 核心上游来自 **[yetone/magpie](https://github.com/yetone/magpie)**（MIT）。
+> 界面、接口、数据全部来自它；这里只是 Android 壳。
+
+Magisk 模块 [magpie-android-magisk](https://github.com/yqing004-boop/magpie-android-magisk)（`main` 分支）的配套 App。
 
 包名 **`com.magpie.module`**，与老版 `com.magpie.android` 完全独立，可以同时装。
 
@@ -61,4 +64,4 @@ app/src/main/java/com/magpie/module/
 
 ## 许可
 
-MIT。magpie 内核版权归 yetone。
+MIT。magpie 核心版权归 [yetone](https://github.com/yetone)，见上游 [yetone/magpie](https://github.com/yetone/magpie)。
