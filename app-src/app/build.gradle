@@ -1,0 +1,70 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 模块版壳：不打包内核二进制。
+//
+// 老版（com.magpie.android）把 98MB 的 magpie.bin 塞进 assets，APK 因此 99MB。
+// 模块版的内核跑在 Magisk 模块里（/data/adb/modules/magpie_native/magpie），
+// 由模块的 service.sh + watchdog 负责启动和保活，壳只做三件事：
+//   1. 探测 127.0.0.1:3425 / :3430 是否活着
+//   2. 通过 Shizuku/root 读模块的 webkey.txt 和日志
+//   3. 把网页后台装进 WebView，原生页直连 3425 的 HTTP 接口
+//
+// 所以这个 APK 只有几百 KB，而且不需要 targetSdk 28 的 W^X 豁免 ——
+// 它不 exec 任何东西。但为了和老版行为一致（同样的 Shizuku 权限、
+// 同样的前台服务），targetSdk 仍然留在 28。
+
+android {
+    namespace 'com.magpie.module'
+    compileSdk 34
+
+    defaultConfig {
+        // 与老版 com.magpie.android 完全隔离：两个包可以同时装，
+        // 各自的数据目录、SharedPreferences、FileProvider 都不同。
+        applicationId "com.magpie.module"
+        targetSdk 28
+        minSdk 24
+
+        versionCode 1
+        versionName "1.0.0"
+        resValue "string", "default_port", "3425"
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            jniDebuggable true
+            versionNameSuffix "-debug"
+        }
+        release {
+            debuggable false
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            versionNameSuffix "-release"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // Shizuku：读模块的 webkey.txt、日志、启停模块服务。
+    // 四个 jar 与老版同源，构建脚本直接把 app/libs/*.jar 塞进 classpath。
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+}

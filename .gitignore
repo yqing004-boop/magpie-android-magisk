@@ -1,0 +1,11 @@
+# 内核二进制 98MB，不进 git（由 pack.sh 在打包时从外部拷入）
+magpie
+# 打包中间目录
+.pack-stage/
+# 运行时产物
+logs/*.log
+logs/*.log.1
+magpie.pid
+webkey.txt
+data/
+home/
