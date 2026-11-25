@@ -64,7 +64,7 @@ fi
 
 UI_PRINT "*******************************"
 UI_PRINT "  Magpie Native (AI Gateway)   "
-UI_PRINT "  v0.1.4740-r2  android-arm64  "
+UI_PRINT "  v0.1.4740-r3  android-arm64  "
 UI_PRINT "  酷安@图图没耳朵          "
 UI_PRINT "*******************************"
 UI_PRINT "- 模块目录：$MODDIR"
@@ -81,6 +81,8 @@ UI_PRINT "- 模块目录：$MODDIR"
 # ============================================================
 
 UI_PRINT "- 创建目录结构"
+# 清掉上一版留下的「手动停止」标记：刷模块 = 用户要它跑
+rm -f "$MODDIR/stop.flag" "$MODDIR/want-running" 2>/dev/null
 mkdir -p "$MODDIR/data" "$MODDIR/logs" "$MODDIR/scripts" "$MODDIR/home" 2>/dev/null
 
 # ---------- 二进制位置修正：bin/magpie -> 模块根 magpie ----------
@@ -192,6 +194,7 @@ chmod 755 "$MODDIR/magpie" 2>/dev/null
 chmod 755 "$MODDIR"
 chmod 755 "$MODDIR/service.sh" "$MODDIR/post-fs-data.sh" "$MODDIR/uninstall.sh" 2>/dev/null
 chmod 755 "$MODDIR/scripts/"*.sh 2>/dev/null
+chmod 755 "$MODDIR/action.sh" 2>/dev/null
 UI_PRINT "- 内核 magpie 就位 ($(du -k "$MODDIR/magpie" 2>/dev/null | cut -d'	' -f1) KB)"
 
 # ---------- 网页后台固定 key ----------

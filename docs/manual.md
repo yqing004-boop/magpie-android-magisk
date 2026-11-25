@@ -21,7 +21,7 @@
 
 ## 二、安装
 
-1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r2.zip`
+1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r3.zip`
 2. 安装过程会显示：
    - 便携模式标记创建
    - 旧数据检测与迁移结果（如有）
@@ -37,6 +37,80 @@ su -c "sh /data/adb/modules/magpie_native/scripts/selfcheck.sh"
 自检会逐项打 `[OK]` / `[FAIL]`，一次性定位问题。
 
 安装时想跳过自动迁移数据，可在 Magisk 安装命令行环境设置 `SKIP_MIGRATION=1`。
+
+## 二点二、模块页开关：即时启停，不用重启
+
+模块管理器（KernelSU / Magisk / APatch）模块详情页有一颗按钮，点一下就能启停网关。
+
+```
+KernelSU:  模块 → Magpie Native → 右下角那颗播放键
+Magisk:    模块 → Magpie Native → 操作按钮
+```
+
+**它会做什么**：内核在跑就停掉，内核停了就起来，输出直接显示在页面上。
+
+**为什么 r2 及之前不行**：模块页那个开关（右上角 ✓ / ✗）**只是写/删一个 `disable` 文件**，不会重启任何东西，页面上还会弹「重启生效」。而 r2 的 `service.sh` 和 `watchdog.sh` 都不读这个文件 —— 拨关后内核纹丝不动，只能重启手机。
+
+r3 补了三处：
+
+| 位置 | 行为 |
+|---|---|
+| `service.sh` | 开头检查 `disable`，存在就退出，不启动内核 |
+| `watchdog.sh` | 每轮检查 `disable`，存在就把内核停掉（不是不管） |
+| `action.sh` | 模块页按钮：立即启停，不用等 watchdog 那一轮 |
+
+**两种「停」的区别**：
+
+- **模块页开关拨到关** → 写 `disable` → 内核停，且**重启手机也不会起来**（模块整个禁用）
+- **模块页按钮点一下** → 写 `stop.flag` → 内核停，但 `disable` 没动，**重启手机后会自己起来**
+
+命令行也能用：
+
+```sh
+M=/data/adb/modules/magpie_native
+su -c "sh $M/action.sh"              # 一键启停（自动判断方向）
+su -c "sh $M/scripts/stop.sh $M"     # 明确停（写 stop.flag）
+su -c "sh $M/scripts/start.sh $M"    # 明确起（清 stop.flag）
+```
+
+## 二点三、请求暴增导致系统卡死（r3 修）
+
+**症状**：并发请求一多，整个手机卡住，弹「进程 system 没有响应」（system_server ANR）。
+
+**根因**：上游 magpie 的 HTTP 服务**没有任何并发上限**。
+
+```go
+// internal/gateway/gateway.go:713
+srv := &http.Server{
+    Handler:           s.closesWhenHandedOff(s.Front()),
+    ReadHeaderTimeout: 30 * time.Second,
+    IdleTimeout:       5 * time.Minute,
+    ConnState:         s.unread.note,
+}
+```
+
+只有超时，没有 `MaxConns` / 限流 / 队列。`net/http` 默认每个连接一个 goroutine，Go runtime 默认 `GOMAXPROCS` = 核数。手机上 4~8 个核，几十个并发流同时跑就全占满，system_server 抢不到 CPU 就 ANR。
+
+上游也没有提供任何环境变量或设置项来控制这件事（我查了 `internal/` 里所有 `MAGPIE_*` 变量，没有跟并发相关的）。
+
+**r3 的解法**：不改内核，从进程层面压（`scripts/limit.sh`）：
+
+| 手段 | 作用 |
+|---|---|
+| `nice 15` | 内核只在系统空闲时拿 CPU，system_server 永远优先 |
+| `taskset` 绑小核 | 读 `/sys/.../cpufreq/cpuinfo_max_freq` 找主频最低的几个核，只在那儿跑，不占大核 |
+| `ionice 3` | 日志和 `usage.jsonl` 的写入不抢前台 I/O |
+
+`service.sh` 启动时、`restart.sh` 重启后、模块页按钮启动时都会调；
+watchdog 每分钟复查一次，`nice` 掉了会补回来。
+
+**效果**：网关吞吐几乎不变（瓶颈在网络和供应商 API，不在 CPU），系统卡死消失。
+
+自检里能看到当前状态：
+
+```
+[OK] 内核已降优先级 nice=15（CPU=0-3）
+```
 
 ## 二点五、模块目录是怎么解析的（KernelSU 必读）
 
@@ -89,10 +163,13 @@ Magisk 传的是绝对路径，所以这个坑只在 KernelSU / APatch 的相对
 ├── logs/
 │   ├── magpie.log
 │   └── watchdog.log
+├── action.sh                # ← 模块页那颗按钮（一键启停）
 ├── scripts/
-│   ├── watchdog.sh          # 10 秒轮询守护（单实例）
+│   ├── watchdog.sh          # 10 秒轮询守护（单实例，读 disable）
+│   ├── limit.sh             # 降 nice + 绑小核 + I/O 低优先级
 │   ├── restart.sh           # 重启内核（App 也调这个）
-│   ├── stop.sh              # 停内核 + watchdog
+│   ├── start.sh             # 明确启动
+│   ├── stop.sh              # 停内核 + watchdog（写 stop.flag）
 │   ├── bridge.sh            # 只读桥：把 webkey/日志暴露给 App
 │   ├── selfcheck.sh         # 自检
 │   ├── migrate-from-apk.sh  # APK 版数据迁移
@@ -114,7 +191,7 @@ if fi, err := os.Stat(filepath.Join(base, MarkerName)); err == nil && !fi.IsDir(
 
 二进制在 `bin/magpie`、标记在 `bin/.portable` 时，内核读写的是 `bin/data`。而 `customize.sh` 建的是模块根 `data/` —— **迁移校验会通过，但内核读的是空目录**，账号和网关配置全丢。这个 bug 不报错，只表现为「网页后台打开是空的」。
 
-v0.1.4740 就是这个布局，v0.1.4740-r2 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
+v0.1.4740 就是这个布局，v0.1.4740-r3 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
 
 ## 四、数据迁移（从 APK 版）
 
@@ -193,7 +270,7 @@ sh /data/adb/modules/magpie_native/scripts/restart.sh /data/adb/modules/magpie_n
 
 `data/` 与内核版本无关，换版本不用动。
 
-**重新打 zip 用脚本**（就在本仓库根目录）：
+**重新打 zip 用脚本**（就在模块源码根目录）：
 
 ```
 sh scripts/pack.sh <新内核路径> v0.1.xxxx vvvv
@@ -291,6 +368,16 @@ rm -rf /data/adb/modules/magpie_native/data
 **网页后台每次重启 key 都变**
 → 旧版没设 `MAGPIE_WEB_KEY`。r1 已修（`webkey.txt` 固定）。
 
+**模块页开关拨了没反应**
+r3 之前不读 `disable` 文件。r3 之后：拨关 → 最多 10 秒内核停；拨开 → 需要点一下模块页那颗按钮（或重启）才会起来，因为 watchdog 被 `disable` 停住时自己也退出了。
+
+**手机卡死 / 「进程 system 没有响应」**
+r3 之前没有限流。检查 `nice`：
+```
+su -c "awk '{print \$19}' /proc/$(cat /data/adb/modules/magpie_native/magpie.pid)/stat"
+```
+应该是 15。是 0 就跑一次：`su -c "sh /data/adb/modules/magpie_native/scripts/limit.sh --all"`
+
 **模块版 App 显示「只读桥未挂载」**
 → 模块没装，或 `service.sh` 没跑过。手动：`su -c "sh /data/adb/modules/magpie_native/scripts/bridge.sh /data/adb/modules/magpie_native"`
 
@@ -301,6 +388,17 @@ rm -rf /data/adb/modules/magpie_native/data
 
 ## 版本记录
 
+- **v0.1.4740-r3**（versionCode 4743）
+  - 新增：**模块页按钮即时启停**（`action.sh`），不用重启手机
+  - 修：`service.sh` / `watchdog.sh` 现在读 `disable`，模块页开关立刻生效
+  - 新增：`stop.flag` 机制 —— 手动停的内核不会被 watchdog 拉回来
+  - 修：**请求暴增拖死系统**（system_server ANR）。内核没有并发上限，
+    用 `scripts/limit.sh` 降 nice + 绑小核 + I/O 低优先级压住
+  - 修：watchdog 端口探测改成只读 `/proc/net/tcp`，不再每轮 fork 3~4 个进程
+  - 修：网页后台默认监听改回 `127.0.0.1:3430`（原 `0.0.0.0` 会让局域网可访问，
+    在共享没开时属于多余暴露）
+  - 新增：`scripts/start.sh` 明确启动
+  - 自检加「模块页开关」与「限流状态」两项
 - **v0.1.4740-r2**（versionCode 4742）
   - 修：**模块目录解析改用 `$MODPATH`**，兜底 `$MODDIR → $0 目录 → pwd`。
     KernelSU 的 meta-overlayfs `metainstall` 用相对路径执行 `sh customize.sh`，

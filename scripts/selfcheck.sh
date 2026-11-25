@@ -67,6 +67,28 @@ elif [ "$WD" -eq 0 ]; then fail "watchdog 没在跑"
 else fail "watchdog 有 $WD 个实例（应只有 1 个）"; fi
 echo
 
+echo "3.5 模块页开关与限流"
+if [ -f "$MODDIR/disable" ]; then
+  warn "模块页开关是「关」（disable 存在）—— 内核本该是停的"
+else
+  pass "模块页开关是「开」（无 disable）"
+fi
+if [ -f "$MODDIR/stop.flag" ]; then
+  warn "stop.flag 存在（用户手动停过）—— 内核不会自动起，用 action.sh 或 start.sh 恢复"
+else
+  pass "无 stop.flag"
+fi
+if [ -n "$MPID" ] && [ -d "/proc/$MPID" ]; then
+  NICE=$(awk '{print $19}' "/proc/$MPID/stat" 2>/dev/null)
+  AFF=$(grep Cpus_allowed_list "/proc/$MPID/status" 2>/dev/null | awk '{print $2}')
+  if [ -n "$NICE" ] && [ "$NICE" -ge 10 ] 2>/dev/null; then
+    pass "内核已降优先级 nice=$NICE（CPU=${AFF:-?}）"
+  else
+    fail "内核 nice=${NICE:-?} 偏低 —— 请求暴增可能拖死系统，跑 scripts/limit.sh $MPID"
+  fi
+fi
+echo
+
 echo "4. 端口"
 if netstat -tlnp 2>/dev/null | grep -q ":3425 "; then pass "3425 在监听"
 elif busybox netstat -tlnp 2>/dev/null | grep -q ":3425 "; then pass "3425 在监听（busybox）"

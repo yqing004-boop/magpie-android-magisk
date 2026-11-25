@@ -33,18 +33,18 @@ kill_matching() {
 }
 
 # 1. 先杀 watchdog，防止它把主进程拉活
-kill_matching "" "watchdog.sh"
-kill_matching "-9" "watchdog.sh"
+kill_matching "" "$MODDIR/scripts/watchdog.sh"
+kill_matching "-9" "$MODDIR/scripts/watchdog.sh"
 
 # 2. 再杀主进程
 if [ -f "$PIDFILE" ]; then
   PID=$(cat "$PIDFILE" 2>/dev/null)
   [ -n "$PID" ] && kill "$PID" 2>/dev/null
 fi
-kill_matching "" "magpie_native/magpie"
+kill_matching "" "$MODDIR/magpie"
 sleep 1
-kill_matching "-9" "magpie_native/magpie"
-rm -f "$PIDFILE"
+kill_matching "-9" "$MODDIR/magpie"
+rm -f "$PIDFILE" "$MODDIR/stop.flag" "$MODDIR/want-running"
 
 # 3. 解除 DNS bind mount（如果是我们挂的）
 umount /system/etc/resolv.conf 2>/dev/null

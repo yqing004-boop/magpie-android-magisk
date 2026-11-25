@@ -20,16 +20,29 @@ export HOME="$MODDIR/home"
 export MAGPIE_NO_STATS=1
 unset MAGPIE_ADDR
 
+DISABLE="$MODDIR/disable"
+STOPFLAG="$MODDIR/stop.flag"
+
 mkdir -p "$LOGDIR" "$HOME"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [restart] $1" >> "$LOGDIR/watchdog.log"; }
+
+# 模块页开关是关的：重启没有意义，watchdog 会立刻停掉
+if [ -f "$DISABLE" ]; then
+  log "模块页开关是关的，拒绝重启"
+  echo "模块页开关是关的（disable 存在）。要跑请先在模块页打开开关。"
+  exit 1
+fi
+
+# 重启 = 用户要它跑，清掉「手动停止」标记
+rm -f "$STOPFLAG"
 
 # 1. 停 watchdog（否则它会和这个脚本抢着启动，两个进程撞端口）
 for d in /proc/[0-9]*; do
   p=${d#/proc/}
   c=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
   case "$c" in
-    *watchdog.sh*magpie_native*) kill "$p" 2>/dev/null ;;
+    *"$MODDIR/scripts/watchdog.sh"*) kill "$p" 2>/dev/null ;;
   esac
 done
 sleep 1
@@ -43,7 +56,7 @@ for d in /proc/[0-9]*; do
   p=${d#/proc/}
   c=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
   case "$c" in
-    *magpie_native/magpie*serve*) kill "$p" 2>/dev/null ;;
+    *"$MODDIR/magpie"*serve*) kill "$p" 2>/dev/null ;;
   esac
 done
 rm -f "$PIDFILE"
@@ -61,14 +74,16 @@ done
 # 4. 拉起内核
 cd "$MODDIR" || exit 1
 if command -v nohup >/dev/null 2>&1; then
-  nohup "$BIN" serve --web=0.0.0.0:3430 >> "$LOGDIR/magpie.log" 2>&1 &
+  nohup "$BIN" serve --web=127.0.0.1:3430 >> "$LOGDIR/magpie.log" 2>&1 &
 elif command -v setsid >/dev/null 2>&1; then
-  setsid "$BIN" serve --web=0.0.0.0:3430 >> "$LOGDIR/magpie.log" 2>&1 &
+  setsid "$BIN" serve --web=127.0.0.1:3430 >> "$LOGDIR/magpie.log" 2>&1 &
 else
-  "$BIN" serve --web=0.0.0.0:3430 >> "$LOGDIR/magpie.log" 2>&1 &
+  "$BIN" serve --web=127.0.0.1:3430 >> "$LOGDIR/magpie.log" 2>&1 &
 fi
 NEWPID=$!
 echo "$NEWPID" > "$PIDFILE"
+# 限流：nice 15 + 绑小核，避免请求暴增时拖垮系统
+sh "$MODDIR/scripts/limit.sh" "$NEWPID" "$MODDIR" >/dev/null 2>&1
 log "内核已重启 pid=$NEWPID"
 
 # 5. 重新拉起 watchdog

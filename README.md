@@ -13,7 +13,7 @@
 
 ## 安装
 
-1. 下载 `magpie-native-v0.1.4740-r2.zip`
+1. 下载 `magpie-native-v0.1.4740-r3.zip`
 2. 模块管理器 → 从存储安装 → 重启
 3. 自检：
 
@@ -22,6 +22,41 @@ su -c "sh /data/adb/modules/magpie_native/scripts/selfcheck.sh"
 ```
 
 10 项逐条打 `[OK]` / `[FAIL]`，哪项挂了看下面「常见问题」。
+
+## 模块页开关：即时启停，不用重启
+
+模块管理器（KernelSU / Magisk / APatch）详情页有一颗按钮，点一下启停网关。
+
+```
+KernelSU:  模块 → Magpie Native → 右下角播放键
+Magisk:    模块 → Magpie Native → 操作按钮
+```
+
+两种「停」不一样：
+
+| 操作 | 效果 |
+|---|---|
+| 右上角开关拨到关 | 写 `disable`，内核停，**重启手机也不会起**（模块整个禁用） |
+| 点那颗按钮 | 写 `stop.flag`，内核停，**重启手机后会自己恢复** |
+
+命令行：
+
+```sh
+M=/data/adb/modules/magpie_native
+su -c "sh $M/action.sh"              # 一键启停（自动判断方向）
+su -c "sh $M/scripts/stop.sh $M"     # 明确停
+su -c "sh $M/scripts/start.sh $M"    # 明确起
+```
+
+## 请求多了会把手机拖死？
+
+r3 之前会。上游的 HTTP 服务没有并发上限，几十个流同时跑就吃满所有核，
+system_server 抢不到 CPU 就弹「进程 system 没有响应」。
+
+r3 用 `scripts/limit.sh` 从进程层压住：`nice 15` + 绑到小核 + I/O 最低优先级。
+网关吞吐几乎不变（瓶颈在网络和供应商 API），但系统卡死消失。
+
+自检里能看到：`[OK] 内核已降优先级 nice=15（CPU=0-3）`
 
 ## 端口
 
@@ -42,7 +77,8 @@ su -c "sh /data/adb/modules/magpie_native/scripts/selfcheck.sh"
 ├── home/               # agent 的 $HOME
 ├── webkey.txt          # 网页后台固定 key
 ├── logs/               # magpie.log / watchdog.log
-└── scripts/            # watchdog / restart / stop / bridge / selfcheck
+├── action.sh           # 模块页那颗按钮（一键启停）
+└── scripts/            # watchdog / limit / restart / start / stop / bridge / selfcheck
 ```
 
 `magpie`、`.portable`、`data/` 三者必须同级 —— 内核按「二进制旁边的 `data/`」判便携目录，放错位置会读到一个空目录，表现为网页后台一片空白且不报错。
@@ -51,9 +87,11 @@ su -c "sh /data/adb/modules/magpie_native/scripts/selfcheck.sh"
 
 ```sh
 M=/data/adb/modules/magpie_native
-su -c "sh $M/scripts/selfcheck.sh"   # 自检
+su -c "sh $M/scripts/selfcheck.sh"   # 自检（含开关与限流状态）
 su -c "sh $M/scripts/restart.sh $M"  # 重启内核
 su -c "sh $M/scripts/stop.sh $M"     # 停内核 + watchdog
+su -c "sh $M/scripts/start.sh $M"    # 启动
+su -c "sh $M/scripts/limit.sh --all" # 手动补一次限流
 ```
 
 ## 常见问题
@@ -69,6 +107,16 @@ r1 及更早的 bug，KernelSU 的 metainstall 用相对路径执行脚本导致
 
 **日志里 `magpie: HOME is not set`**
 r1 及更早的 bug，r2 已修。
+
+**模块页开关拨了没反应**
+r2 及更早不读 `disable` 文件。r3 已修：拨关最多 10 秒内核停；拨开要点一下模块页那颗按钮才会起（watchdog 在 disable 期间自己也会退出）。
+
+**手机卡死 / 「进程 system 没有响应」**
+r2 及更早没有限流。r3 已修。检查 nice：
+```sh
+su -c "awk '{print \$19}' /proc/$(cat /data/adb/modules/magpie_native/magpie.pid)/stat"
+```
+应该是 15。是 0 就跑 `su -c "sh /data/adb/modules/magpie_native/scripts/limit.sh --all"`。
 
 更多细节见 **[完整手册](docs/manual.md)**（换内核、DNS、数据迁移、watchdog 机制、卸载）。
 

@@ -43,6 +43,7 @@ cp -f "$SRC/customize.sh"     "$STAGE/customize.sh"
 cp -f "$SRC/service.sh"       "$STAGE/service.sh"
 cp -f "$SRC/post-fs-data.sh"  "$STAGE/post-fs-data.sh"
 cp -f "$SRC/uninstall.sh"     "$STAGE/uninstall.sh"
+cp -f "$SRC/action.sh"        "$STAGE/action.sh"
 cp -f "$SRC/README.md"        "$STAGE/README.md"
 
 # ---------- 脚本 ----------
@@ -64,7 +65,7 @@ chmod 644 "$STAGE/.portable"
 
 # ---------- 权限 ----------
 chmod 755 "$STAGE" "$STAGE/scripts"
-chmod 755 "$STAGE/customize.sh" "$STAGE/service.sh" "$STAGE/post-fs-data.sh" "$STAGE/uninstall.sh"
+chmod 755 "$STAGE/customize.sh" "$STAGE/service.sh" "$STAGE/post-fs-data.sh" "$STAGE/uninstall.sh" "$STAGE/action.sh"
 chmod 755 "$STAGE/scripts/"*.sh
 chmod 644 "$STAGE/module.prop" "$STAGE/README.md" "$STAGE/system/etc/resolv.conf"
 
