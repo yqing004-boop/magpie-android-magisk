@@ -2,5 +2,5 @@ id=magpie_native
 name=Magpie Native (AI Gateway)
 version=v0.1.4740-r2
 versionCode=4742
-author=yetone (module packaged by FJ)
-description=Magpie AI 网关原生内核（Android arm64），开机自启，网关 3425 / 网页后台 3430。便携数据在模块根 data/，可从 APK 版迁移。配套模块版 App 壳探测 3425 直连，不再 fork 内核。
+author=酷安@图图没耳朵（内核 yetone）
+description=Magpie AI 网关原生内核（Android arm64），开机自启，网关 3425 / 网页后台 3430。便携数据在模块根 data/，可从 APK 版迁移。

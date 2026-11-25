@@ -65,6 +65,7 @@ fi
 UI_PRINT "*******************************"
 UI_PRINT "  Magpie Native (AI Gateway)   "
 UI_PRINT "  v0.1.4740-r2  android-arm64  "
+UI_PRINT "  酷安@图图没耳朵          "
 UI_PRINT "*******************************"
 UI_PRINT "- 模块目录：$MODDIR"
 
