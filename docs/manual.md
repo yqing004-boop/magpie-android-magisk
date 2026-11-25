@@ -190,7 +190,7 @@ sh /data/adb/modules/magpie_native/scripts/restart.sh /data/adb/modules/magpie_n
 
 `data/` 与内核版本无关，换版本不用动。
 
-**重新打 zip 用脚本**（源码在私有仓库 `magpie-bake/magisk-module/`）：
+**重新打 zip 用脚本**（就在本仓库根目录）：
 
 ```
 sh scripts/pack.sh <新内核路径> v0.1.xxxx vvvv
