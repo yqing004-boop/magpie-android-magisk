@@ -21,7 +21,7 @@
 
 ## 二、安装
 
-1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r3.zip`
+1. 打开 Magisk App → 模块 → 从存储安装 → 选 `magpie-native-v0.1.4740-r4.zip`
 2. 安装过程会显示：
    - 便携模式标记创建
    - 旧数据检测与迁移结果（如有）
@@ -191,7 +191,7 @@ if fi, err := os.Stat(filepath.Join(base, MarkerName)); err == nil && !fi.IsDir(
 
 二进制在 `bin/magpie`、标记在 `bin/.portable` 时，内核读写的是 `bin/data`。而 `customize.sh` 建的是模块根 `data/` —— **迁移校验会通过，但内核读的是空目录**，账号和网关配置全丢。这个 bug 不报错，只表现为「网页后台打开是空的」。
 
-v0.1.4740 就是这个布局，v0.1.4740-r3 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
+v0.1.4740 就是这个布局，v0.1.4740-r4 已修正：二进制上移到模块根，`customize.sh` 还会自动把旧布局的 `bin/magpie`、`bin/.portable`、`bin/data` 合并回正确位置。
 
 ## 四、数据迁移（从 APK 版）
 
@@ -388,7 +388,7 @@ su -c "awk '{print \$19}' /proc/$(cat /data/adb/modules/magpie_native/magpie.pid
 
 ## 版本记录
 
-- **v0.1.4740-r3**（versionCode 4743）
+- **v0.1.4740-r4**（versionCode 4743）
   - 新增：**模块页按钮即时启停**（`action.sh`），不用重启手机
   - 修：`service.sh` / `watchdog.sh` 现在读 `disable`，模块页开关立刻生效
   - 新增：`stop.flag` 机制 —— 手动停的内核不会被 watchdog 拉回来

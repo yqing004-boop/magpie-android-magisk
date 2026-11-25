@@ -14,8 +14,10 @@
 
 MODDIR="$1"
 [ -z "$MODDIR" ] && MODDIR=$(cd "$(dirname "$0")/.." && pwd)
-
-SRC="/data/data/com.magpie.android/files/magpie/data"
+# 第二个参数可指定旧数据源（默认老 APK 版）。
+# customize.sh 的音量键流程不需要它，这里只是让手动排查时能指向任意目录。
+SRC="$2"
+[ -z "$SRC" ] && SRC="/data/data/com.magpie.android/files/magpie/data"
 DST="$MODDIR/data"
 
 fail() {

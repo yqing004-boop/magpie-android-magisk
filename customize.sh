@@ -64,7 +64,7 @@ fi
 
 UI_PRINT "*******************************"
 UI_PRINT "  Magpie Native (AI Gateway)   "
-UI_PRINT "  v0.1.4740-r3  android-arm64  "
+UI_PRINT "  v0.1.4740-r4  android-arm64  "
 UI_PRINT "  酷安@图图没耳朵          "
 UI_PRINT "*******************************"
 UI_PRINT "- 模块目录：$MODDIR"
@@ -215,31 +215,94 @@ fi
 # ---------- 从 APK 版迁移旧数据 ----------
 # 旧 APK 数据目录：/data/data/com.magpie.android/files/magpie/data/
 # 里面 usage.jsonl 是历史用量账本，绝不能丢。
-# 刷入时设置 SKIP_MIGRATION=1 可跳过（默认自动迁移）。
+#
+# 交互方式（音量键选择）：
+#   检测到旧数据时会问「要不要迁移」，音量上=迁移 / 音量下=跳过，
+#   10 秒不按默认迁移。已迁移过（data/usage.jsonl 已存在）则不再问，
+#   直接跳过 —— 每次更新刷入都快。
+#
+# 也可以刷入前设环境变量 SKIP_MIGRATION=1 一票否决（用 KSU 的 adb 命令刷）。
+
 OLD_DATA="/data/data/com.magpie.android/files/magpie/data"
 
-if [ "$SKIP_MIGRATION" != "1" ] && [ -d "$OLD_DATA" ]; then
+# ask_migration <提示语>
+# 返回 0 = 迁移，1 = 跳过。没有 getevent（极少数 ROM）时默认迁移。
+ask_migration() {
+  UI_PRINT ""
+  UI_PRINT "  音量上 = 迁移（默认）"
+  UI_PRINT "  音量下 = 跳过（10 秒不按按迁移算）"
+  UI_PRINT ""
+  # KSU/Magisk 的安装环境里 getevent 可用（/dev/input 由 root 可读）
+  if ! command -v getevent >/dev/null 2>&1; then
+    UI_PRINT "- 此环境不支持按键选择，默认迁移"
+    return 0
+  fi
+  # 找一个输入设备：优先 gpio-keys（实体按键），否则第一个 event 节点
+  DEV=""
+  for d in /dev/input/event*; do
+    [ -r "$d" ] || continue
+    case "$(getevent -pl 2>/dev/null | grep -A1 "$d" | head -1)" in
+      *gpio-keys*) DEV="$d"; break ;;
+    esac
+  done
+  [ -z "$DEV" ] && DEV=$(ls /dev/input/event* 2>/dev/null | head -1)
+  [ -z "$DEV" ] && { UI_PRINT "- 找不到输入设备，默认迁移"; return 0; }
+
+  # getevent -ql 输出形如：/dev/input/event0 EV_KEY KEY_VOLUMEUP DOWN
+  # 用 timeout 限 10 秒；toybox 的 timeout 用法：timeout <秒> <cmd>
+  RESULT=$(timeout 10 getevent -ql "$DEV" 2>/dev/null | while read -r _t _type _code _val; do
+    case "$_type" in
+      EV_KEY) ;;
+      *) continue ;;
+    esac
+    case "$_code" in
+      KEY_VOLUMEUP)   echo up;   break ;;
+      KEY_VOLUMEDOWN) echo down; break ;;
+    esac
+  done)
+  case "$RESULT" in
+    down)
+      UI_PRINT "- 选择：跳过迁移"
+      return 1
+      ;;
+    *)
+      UI_PRINT "- 选择：迁移（或超时默认）"
+      return 0
+      ;;
+  esac
+}
+
+if [ "$SKIP_MIGRATION" = "1" ]; then
+  UI_PRINT "- SKIP_MIGRATION=1，跳过迁移"
+elif [ ! -d "$OLD_DATA" ]; then
+  UI_PRINT "- 未检测到旧 APK 数据目录，跳过迁移"
+elif [ -s "$MODDIR/data/usage.jsonl" ]; then
+  # 模块自己的 data/ 里已经有账本：说明之前迁移过或模块版已写过账本。
+  # 再问一遍只会让每次更新刷入都慢几十秒，直接跳过。
+  UI_PRINT "- 模块 data/usage.jsonl 已存在（之前迁移过或已在使用），跳过"
+  UI_PRINT "  如需重新迁移，手动跑："
+  UI_PRINT "  sh $MODDIR/scripts/migrate-from-apk.sh $MODDIR"
+else
   UI_PRINT "- 检测到旧 APK 版数据目录"
   UI_PRINT "  $OLD_DATA"
   if [ -f "$OLD_DATA/usage.jsonl" ]; then
-    UI_PRINT "- usage.jsonl 存在（历史账本），开始迁移"
+    UI_PRINT "- usage.jsonl 存在（历史账本，$(wc -l < "$OLD_DATA/usage.jsonl" 2>/dev/null | tr -d ' ') 行）"
   else
     UI_PRINT "! 警告：旧目录里没有 usage.jsonl"
   fi
-  sh "$MODDIR/scripts/migrate-from-apk.sh" "$MODDIR"
-  if [ $? -eq 0 ]; then
-    UI_PRINT "- 数据迁移完成，usage.jsonl 行数校验通过"
-    UI_PRINT "- 提示：lan / gateway-mode 设置原样保留，无需重设"
-    UI_PRINT "! 记得停用或卸载旧 APK 版，否则两者抢 3425 端口"
+  if ask_migration; then
+    sh "$MODDIR/scripts/migrate-from-apk.sh" "$MODDIR"
+    if [ $? -eq 0 ]; then
+      UI_PRINT "- 数据迁移完成，usage.jsonl 行数校验通过"
+      UI_PRINT "- 提示：lan / gateway-mode 设置原样保留，无需重设"
+      UI_PRINT "! 记得停用或卸载旧 APK 版，否则两者抢 3425 端口"
+    else
+      UI_PRINT "! 迁移脚本返回失败，旧数据未删除，可稍后手动跑："
+      UI_PRINT "  sh $MODDIR/scripts/migrate-from-apk.sh $MODDIR"
+    fi
   else
-    UI_PRINT "! 迁移脚本返回失败，旧数据未删除，可稍后手动跑："
+    UI_PRINT "- 已跳过迁移。以后想迁随时手动跑："
     UI_PRINT "  sh $MODDIR/scripts/migrate-from-apk.sh $MODDIR"
-  fi
-else
-  if [ "$SKIP_MIGRATION" = "1" ]; then
-    UI_PRINT "- SKIP_MIGRATION=1，跳过迁移"
-  else
-    UI_PRINT "- 未检测到旧 APK 数据目录，跳过迁移"
   fi
 fi
 

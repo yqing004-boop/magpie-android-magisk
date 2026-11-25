@@ -1,6 +1,6 @@
 id=magpie_native
 name=Magpie Native (AI Gateway)
-version=v0.1.4740-r3
-versionCode=4743
+version=v0.1.4740-r4
+versionCode=4744
 author=酷安@图图没耳朵（内核 yetone）
 description=Magpie AI 网关原生内核（Android arm64）。模块页开关即时生效，不用重启；内核降优先级绑小核，请求暴增不再拖死系统。网关 3425 / 网页后台 3430。
